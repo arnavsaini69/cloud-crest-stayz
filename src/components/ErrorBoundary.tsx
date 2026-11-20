@@ -36,22 +36,6 @@ export class ErrorBoundary extends Component<
 
   public render(): ReactNode {
     if (this.state.hasError) {
-      let readableMessage = this.state.message;
-      try {
-        const parsed = JSON.parse(this.state.message) as {
-          error?: string;
-          operationType?: string;
-          path?: string;
-        };
-        if (parsed.error && parsed.operationType) {
-          readableMessage = `Database access error during ${parsed.operationType}${
-            parsed.path ? ` on ${parsed.path}` : ''
-          }: ${parsed.error}`;
-        }
-      } catch {
-        // Use raw message if not JSON
-      }
-
       return (
         <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-6">
           <div className="max-w-md w-full rounded-xl border border-stone-800 bg-stone-900/70 p-7 text-center">
@@ -62,7 +46,7 @@ export class ErrorBoundary extends Component<
               Unable to complete request
             </h1>
             <p className="mt-2 text-sm text-stone-400 leading-relaxed break-words">
-              {readableMessage}
+              {this.state.message}
             </p>
             <button
               type="button"

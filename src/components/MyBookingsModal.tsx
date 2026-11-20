@@ -1,25 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Calendar, MapPin, X, CheckCircle2, Ban } from 'lucide-react';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-
-export interface PersistedBooking {
-  id: string;
-  userId: string;
-  stayId: string;
-  stayName: string;
-  stayLocation: string;
-  nights: number;
-  guests: number;
-  totalAmount: number;
-  status: 'confirmed' | 'cancelled';
-}
+import type { PersistedBooking } from '../lib/storage';
 
 interface MyBookingsModalProps {
   isOpen: boolean;
   bookings: PersistedBooking[];
   onClose: () => void;
   onSelectStayId: (stayId: string) => void;
+  onCancelBooking: (bookingId: string) => void;
 }
 
 export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
@@ -27,9 +15,8 @@ export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
   bookings,
   onClose,
   onSelectStayId,
+  onCancelBooking,
 }) => {
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
-
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -40,21 +27,6 @@ export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
-
-  const handleCancelBooking = async (bookingId: string) => {
-    setCancellingId(bookingId);
-    const path = `bookings/${bookingId}`;
-    try {
-      await updateDoc(doc(db, 'bookings', bookingId), {
-        status: 'cancelled',
-        updatedAt: serverTimestamp(),
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
-    } finally {
-      setCancellingId(null);
-    }
-  };
 
   return (
     <div
@@ -74,7 +46,9 @@ export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
               My Sanctuary Bookings
             </h2>
             <p className="text-xs text-stone-400 mt-0.5 tabular-nums">
-              {bookings.length} {bookings.length === 1 ? 'reservation' : 'reservations'} linked to your verified Google account
+              {bookings.length}{' '}
+              {bookings.length === 1 ? 'reservation' : 'reservations'} linked to
+              your Google account
             </p>
           </div>
           <button
@@ -119,7 +93,9 @@ export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
                           Cancelled
                         </span>
                       )}
-                      <span aria-hidden="true" className="text-stone-600">·</span>
+                      <span aria-hidden="true" className="text-stone-600">
+                        ·
+                      </span>
                       <span className="text-stone-400 tabular-nums">
                         Ref #{booking.id.slice(0, 10)}
                       </span>
@@ -143,11 +119,13 @@ export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>
-                        {booking.nights} {booking.nights === 1 ? 'night' : 'nights'}
+                        {booking.nights}{' '}
+                        {booking.nights === 1 ? 'night' : 'nights'}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>
-                        {booking.guests} {booking.guests === 1 ? 'guest' : 'guests'}
+                        {booking.guests}{' '}
+                        {booking.guests === 1 ? 'guest' : 'guests'}
                       </span>
                     </div>
                   </div>
@@ -160,11 +138,10 @@ export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
                     {isConfirmed && (
                       <button
                         type="button"
-                        disabled={cancellingId === booking.id}
-                        onClick={() => void handleCancelBooking(booking.id)}
-                        className="min-h-[36px] px-3 py-1.5 rounded-lg border border-stone-700 text-xs font-medium text-stone-300 hover:text-red-300 hover:border-red-500/40 transition-colors disabled:opacity-50"
+                        onClick={() => onCancelBooking(booking.id)}
+                        className="min-h-[36px] px-3 py-1.5 rounded-lg border border-stone-700 text-xs font-medium text-stone-300 hover:text-red-300 hover:border-red-500/40 transition-colors"
                       >
-                        {cancellingId === booking.id ? 'Cancelling...' : 'Cancel Booking'}
+                        Cancel Booking
                       </button>
                     )}
                   </div>

@@ -1,10 +1,10 @@
 import React from 'react';
 import { ShieldCheck, Lock, Star, Bookmark, AlertCircle } from 'lucide-react';
 import { HERO_BACKDROP_IMAGE } from '../data/stays';
-import { useFirebase } from '../contexts/FirebaseContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export const AuthGate: React.FC = () => {
-  const { signInWithGoogle, signingIn, authError, clearAuthError } = useFirebase();
+  const { signInWithGoogle, signingIn, authError, clearAuthError } = useAuth();
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col lg:flex-row">
@@ -42,7 +42,7 @@ export const AuthGate: React.FC = () => {
         <div className="max-w-md w-full">
           <div className="inline-flex items-center gap-2 text-xs font-medium text-amber-300 mb-3">
             <ShieldCheck className="w-4 h-4" />
-            <span>Protected by Firebase Authentication</span>
+            <span>Protected by Google Identity Sign-In</span>
           </div>
 
           <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-stone-100 tracking-tight">
@@ -105,16 +105,16 @@ export const AuthGate: React.FC = () => {
             </span>
           </button>
 
-          {/* Member Benefits & Firebase Security Summary */}
+          {/* Member Benefits */}
           <div className="mt-8 pt-6 border-t border-stone-800 space-y-4">
             <div className="flex items-start gap-3">
               <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-stone-200">
-                  Owner-Isolated Profiles &amp; Bookings
+                  Private Member Bookings
                 </p>
                 <p className="text-xs text-stone-400 mt-0.5 leading-relaxed">
-                  Your email and reservations are protected by strict Firestore security rules tied to your verified Google UID.
+                  Keep track of your reserved Himalayan chalets and trip durations under your Google profile.
                 </p>
               </div>
             </div>
@@ -123,10 +123,10 @@ export const AuthGate: React.FC = () => {
               <Bookmark className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-stone-200">
-                  Synced Sanctuary Wishlists
+                  Saved Sanctuary Wishlists
                 </p>
                 <p className="text-xs text-stone-400 mt-0.5 leading-relaxed">
-                  Bookmark chalets and glasshouses across sessions with automatic cloud persistence.
+                  Bookmark chalets and glasshouses tailored to your Google account.
                 </p>
               </div>
             </div>

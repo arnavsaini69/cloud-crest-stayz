@@ -10,29 +10,22 @@ import {
   Mountain,
   LogOut,
 } from 'lucide-react';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from 'firebase/firestore';
 import { FEATURED_STAYS, HERO_BACKDROP_IMAGE, type Stay } from './data/stays';
 import { StayDetailsView } from './components/StayDetailsView';
 import { AuthGate } from './components/AuthGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { MyBookingsModal } from './components/MyBookingsModal';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import {
-  MyBookingsModal,
+  loadBookings,
+  loadFavorites,
+  saveBookings,
+  saveFavorites,
   type PersistedBooking,
-} from './components/MyBookingsModal';
-import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
-import { db, handleFirestoreError, OperationType } from './lib/firebase';
+} from './lib/storage';
 
 function CloudCrestAppContent() {
-  const { user, authLoading, profileReady, signOutUser } = useFirebase();
+  const { user, authLoading, signOutUser } = useAuth();
 
   const [selectedTag, setSelectedTag] = useState<string>('All');
   const [searchDestination, setSearchDestination] = useState<string>('');
@@ -42,70 +35,15 @@ function CloudCrestAppContent() {
   const [activeStay, setActiveStay] = useState<Stay | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
-  // Subscribe to owner-scoped saved favorites only after auth & profile registration are ready
   useEffect(() => {
-    if (!user || !profileReady) {
+    if (!user) {
       setFavorites({});
-      return;
-    }
-
-    const favoritesPath = `users/${user.uid}/favorites`;
-    const unsubscribe = onSnapshot(
-      collection(db, 'users', user.uid, 'favorites'),
-      (snapshot) => {
-        const nextFavs: Record<string, boolean> = {};
-        snapshot.docs.forEach((docSnap) => {
-          nextFavs[docSnap.id] = true;
-        });
-        setFavorites(nextFavs);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.LIST, favoritesPath);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user, profileReady]);
-
-  // Subscribe to owner-scoped bookings only after auth & profile registration are ready
-  useEffect(() => {
-    if (!user || !profileReady) {
       setBookings([]);
       return;
     }
-
-    const bookingsPath = 'bookings';
-    const q = query(
-      collection(db, bookingsPath),
-      where('userId', '==', user.uid)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const loaded: PersistedBooking[] = snapshot.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            userId: String(data.userId || user.uid),
-            stayId: String(data.stayId || ''),
-            stayName: String(data.stayName || ''),
-            stayLocation: String(data.stayLocation || ''),
-            nights: Number(data.nights || 1),
-            guests: Number(data.guests || 1),
-            totalAmount: Number(data.totalAmount || 0),
-            status: data.status === 'cancelled' ? 'cancelled' : 'confirmed',
-          };
-        });
-        setBookings(loaded);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.LIST, bookingsPath);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user, profileReady]);
+    setFavorites(loadFavorites(user.uid));
+    setBookings(loadBookings(user.uid));
+  }, [user]);
 
   if (authLoading) {
     return (
@@ -115,14 +53,14 @@ function CloudCrestAppContent() {
             CloudCrest Stayz
           </p>
           <p className="mt-2 text-xs text-stone-400">
-            Verifying member credentials...
+            Verifying member session...
           </p>
         </div>
       </div>
     );
   }
 
-  // Require Google Sign-In registration before using the website
+  // Require Google Sign-In before using the website
   if (!user) {
     return <AuthGate />;
   }
@@ -147,32 +85,28 @@ function CloudCrestAppContent() {
     return matchesTag && matchesSearch;
   });
 
-  const toggleFavorite = async (stay: Stay, e?: React.MouseEvent) => {
+  const toggleFavorite = (stay: Stay, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!user || !profileReady) return;
-
-    const favPath = `users/${user.uid}/favorites/${stay.id}`;
-    const favRef = doc(db, 'users', user.uid, 'favorites', stay.id);
-    const currentlySaved = Boolean(favorites[stay.id]);
-
-    try {
-      if (currentlySaved) {
-        await deleteDoc(favRef);
-      } else {
-        await setDoc(favRef, {
-          userId: user.uid,
-          stayId: stay.id,
-          stayName: stay.name.slice(0, 140),
-          createdAt: serverTimestamp(),
-        });
-      }
-    } catch (error) {
-      handleFirestoreError(
-        error,
-        currentlySaved ? OperationType.DELETE : OperationType.CREATE,
-        favPath
-      );
+    const nextFavs = { ...favorites, [stay.id]: !favorites[stay.id] };
+    if (!nextFavs[stay.id]) {
+      delete nextFavs[stay.id];
     }
+    setFavorites(nextFavs);
+    saveFavorites(user.uid, nextFavs);
+  };
+
+  const handleBookingCreated = (newBooking: PersistedBooking) => {
+    const updated = [newBooking, ...bookings];
+    setBookings(updated);
+    saveBookings(user.uid, updated);
+  };
+
+  const handleCancelBooking = (bookingId: string) => {
+    const updated = bookings.map((b) =>
+      b.id === bookingId ? { ...b, status: 'cancelled' as const } : b
+    );
+    setBookings(updated);
+    saveBookings(user.uid, updated);
   };
 
   const handleOpenFeaturedReviews = () => {
@@ -234,7 +168,7 @@ function CloudCrestAppContent() {
           <div className="flex items-center shrink-0">
             <button
               type="button"
-              onClick={() => void signOutUser()}
+              onClick={signOutUser}
               aria-label={`Sign out ${user.displayName || 'member'}`}
               className="min-h-[40px] px-3.5 py-2 rounded-lg border border-stone-800 bg-stone-900/80 hover:border-amber-500/40 text-stone-200 hover:text-amber-300 font-medium text-xs inline-flex items-center gap-2 transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
             >
@@ -250,7 +184,8 @@ function CloudCrestAppContent() {
           <StayDetailsView
             stay={activeStay}
             isFavorite={Boolean(favorites[activeStay.id])}
-            onToggleFavorite={() => void toggleFavorite(activeStay)}
+            onToggleFavorite={() => toggleFavorite(activeStay)}
+            onBookingCreated={handleBookingCreated}
             onBack={() => setActiveStay(null)}
             onSelectStay={(stay) => setActiveStay(stay)}
             otherStays={FEATURED_STAYS.filter((s) => s.id !== activeStay.id)}
@@ -431,7 +366,7 @@ function CloudCrestAppContent() {
 
                         <button
                           type="button"
-                          onClick={(e) => void toggleFavorite(stay, e)}
+                          onClick={(e) => toggleFavorite(stay, e)}
                           aria-label={
                             favorites[stay.id]
                               ? `Remove ${stay.name} from saved stays`
@@ -515,10 +450,10 @@ function CloudCrestAppContent() {
                   </div>
                   <div>
                     <h3 className="font-serif text-xl font-semibold text-stone-100">
-                      Owner-Secured Reservations
+                      Google Member Access
                     </h3>
                     <p className="mt-2 text-sm text-stone-400 leading-relaxed">
-                      Bookings, saved wishlists, and member profiles are isolated per Google UID through strict Firestore security rules.
+                      Sign in with your Google account to save sanctuaries, track itineraries, and manage your reservations.
                     </p>
                   </div>
                   <div>
@@ -526,7 +461,7 @@ function CloudCrestAppContent() {
                       Verified Stay Reviews
                     </h3>
                     <p className="mt-2 text-sm text-stone-400 leading-relaxed">
-                      Every testimonial inside our sanctuary pages is published exclusively by authenticated members.
+                      Every testimonial inside our sanctuary pages is published by verified CloudCrest members.
                     </p>
                   </div>
                 </div>
@@ -544,6 +479,7 @@ function CloudCrestAppContent() {
           const found = FEATURED_STAYS.find((s) => s.id === stayId);
           if (found) setActiveStay(found);
         }}
+        onCancelBooking={handleCancelBooking}
       />
 
       {/* Quiet Editorial Footer */}
@@ -562,9 +498,9 @@ function CloudCrestAppContent() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <FirebaseProvider>
+      <AuthProvider>
         <CloudCrestAppContent />
-      </FirebaseProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
