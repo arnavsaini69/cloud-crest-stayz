@@ -148,6 +148,12 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({
         setAuthError(
           'Browser blocked the Google sign-in popup. Allow popups for this site and try again.'
         );
+      } else if (code === 'auth/unauthorized-domain') {
+        const currentHost =
+          typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        setAuthError(
+          `Domain "${currentHost}" is not authorized for Firebase Sign-In yet. Add "${currentHost}" under Firebase Console → Authentication → Settings → Authorized domains.`
+        );
       } else if (code === 'auth/cancelled-popup-request') {
         setAuthError(null);
       } else {
